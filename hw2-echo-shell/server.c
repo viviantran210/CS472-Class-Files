@@ -112,7 +112,7 @@ static void process_requests(int listen_socket){
         }
 
         // send response to client
-        ret = send(data_socket, send_buffer, header->len, 0);
+        ret = send(data_socket, send_buffer, header.len, 0);
         if (ret == -1) {
             perror("send");
         }
