@@ -57,6 +57,28 @@ int process_request(const char *host, uint16_t port, char *resource){
     //    accumulate all of the data received and return this value. 
     //---------------------------------------------------------------------------------
 
+    //generate request and send
+    char *request = generate_cc_request(host, port, resource);
+    int ret = send(sock, request, strlen(request), 0);
+    if (ret != strlen(request)) {
+	    perror("Error sending request");
+	    close(sock);
+	    return -1;
+    }
+
+    // Loop and receive response data from server
+    total_bytes = 0;
+    int bytes_recvd = 0;
+    while ((bytes_recvd = recv(sock, recv_buff, BUFF_SZ, 0)) > 0) {
+	    printf("%.*s", bytes_recvd, recv_buff);
+	    total_bytes += bytes_recvd;
+    }
+
+    // recv() will return a negative number to indicate error or closing socket
+    if (bytes_recvd < 0) {
+        perror("Error receiving response or server closed the socket");
+    }
+
     close(sock);
     return total_bytes;
 }
