@@ -34,30 +34,17 @@ void print_usage(char *exe_name){
 int reopen_socket(const char *host, uint16_t port) {
     int sock = 0;
 
-    //----------------------------------------------------------------------------
-    //TODO: Implement a loop that attempts a certain number of times to open a 
-    //      socket with the host and port that is passed in as parameters.
-    //
-    //      I created a constant called MAX_REOPEN_TRIES (currently set to 5)
-    //      that bounds the number of times we will attempt to reopen a socket
-    //      with the remote web server.
-    //
-    //      What you need to do:
-    //          1. Create a loop that loops MAX_REOPEN_TRIES
-    //          2. In the body of the loop attempt to connect to the server.  
-    //             use the sock = socket_connect(host,port)  function to 
-    //             do this.
-    //          3. The socket_connect function will return a negative number if
-    //             the socket_connect() function fails.  Continue looping if this
-    //             happens up to MAX_REOPEN_TRIES
-    //          4. If socket_connect() returns a positive number it is a valid
-    //             socket so just return it, e.g., return sock
-    //          5. If we fall out of the loop, we are unable to connect, return
-    //             -1 to indicate a failure. 
-    //----------------------------------------------------------------------------
+    // loops MAX_REOPEN_TRIES times
+    // attempts to connect to server
+    for (int i = 0; i < MAX_REOPEN_TRIES; i++) {
+	    sock = socket_connect(host, port);
+	    if (sock >= 0) {
+		    return sock;
+	    }
+	    perror("Connection to server failed");
 
-    
     return -1;
+    }
 }
 
 int server_connect(const char *host, uint16_t port){
@@ -84,21 +71,17 @@ int submit_request(int sock, const char *host, uint16_t port, char *resource){
     //we have a socket error, perhaps the server closed it, lets try to reopen
     //the socket
     if (sent_bytes < 0){
-        //----------------------------------------------------------------------------
-        //TODO:  Reimplement the retry logic to reopen the socket
-        //
-        // The variable sock needs to be reset to a new socket with the server.
-        // 1.  Use the sock = reopen_socket() helper you implemented above in an attempt
-        //     to reopen_the socket.  If it returns a value less than zero, a socket 
-        //     could not be created so return the negative value and exit the function,
-        //     e.g., return sock
-        //
-        //  2. Assuming you got a valid socket, reissue the send again
-        //     sent_bytes = send(sock, req, send_sz,0);
-        //----------------------------------------------------------------------------
-        
-        return -1;  //remove this line of code, i just want this to compile so the
-                    //block of code needs at least one line
+	perror("Error sending request");
+
+        // attempt to reopen socket 
+	sock = reopen_socket(host, port);
+	if (sock < 0) {
+		perror("Error reopening socket");
+		return -1;
+	}
+
+        // Resend request if with the new valid socket
+	sent_bytes = send(sock, req, send_sz, 0);
     }
 
     //This should not happen, but just checking if we didnt send everything and 
@@ -126,38 +109,30 @@ int submit_request(int sock, const char *host, uint16_t port, char *resource){
 
     //remember the first receive we just did has the HTTP header, and likely some body
     //data.  We need to determine how much data we expect
-
-    //--------------------------------------------------------------------------------
-    //TODO:  Get the header len
-    //
-    // 1. Use the get_http_header_len() function to set the header_len variable.
-    // 2. The get_http_header_len() function returns a negative value if it fails, so
-    //    check the header_len variable and if its negative:
-    //          a. close the socket -- close(sock)
-    //          b. return -1 to exit this function
-    //--------------------------------------------------------------------------------
-    int header_len = 0;     //change this to get the header len as per the directions above
     
+    // getting header length
+    int header_len = get_http_header_len(recv_buff, bytes_recvd);
+    if (header_len < 0) {
+	    perror("Error getting HTTP header length");
+	    close(sock);
+	    return -1;
+    }
+
+    // getting content-length header length
+    int content_len = get_http_content_len(recv_buff, header_len);
 
     //--------------------------------------------------------------------------------
-    //TODO:  Get the conetent len
-    //
-    // 1. Use the get_http_content_len() function to set the content_len variable.
-    //
-    // Note that no error checking is needed, if the get_http_content_len() function
-    // cannot find a Content-Length header, its assumed as per the HTTP spec that ther
-    // is no body, AKA, content_len is zero;
-    //--------------------------------------------------------------------------------
-    int content_len = 0;    //Change this to get the content length
-
-    //--------------------------------------------------------------------------------
-    // TODO:  Make sure you understand the calculations below
     //
     // You do not have to write any code, but add to this comment your thoughts on 
     // what the following 2 lines of code do to track the amount of data received
     // from the server
     //
-    // YOUR ANSWER:  <START-YOUR-RESPONSE-HERE>
+    // YOUR ANSWER: bytes_recvd is the total number of bytes received which includes the
+    // HTTP header and maybe some body data. By subtractng it by header_len, you can get 
+    // how much body data was in the first receive. 
+    // content_len is the expected length of the HTTP body taken from the Content-Length
+    // header. By subtracting it by initial_data, you can find out how much more data
+    // needs to be received to get full body. 
     //
     //--------------------------------------------------------------------------------
     int initial_data =  bytes_recvd - header_len;
@@ -168,22 +143,19 @@ int submit_request(int sock, const char *host, uint16_t port, char *resource){
     //defensive an prevent an infinite loop, i have it set to keep looping as long
     //as bytes_remaining is positive
     while(bytes_remaining > 0){
-        //-----------------------------------------------------------------------------
-        // TODO:  Continue receiving data from the server
-        //
-        // 1. make a recv() call to the server, using recv_buff
-        // 2. Get the number of bytes received and store in the bytes_recvd variable
-        // 3. Check for an error, e.g., bytes_recvd < 0 - if that is the case:
-        //      a. close the socket (sock)
-        //      b. return -1 to indicate an error
-        //-----------------------------------------------------------------------------
-        bytes_recvd = 0; // replace with a valid recv(...); call
+       // continue to receive data from server
+       bytes_recvd = recv(sock, recv_buff, sizeof(recv_buff), 0);
+	if (bytes_recvd < 0) {
+		perror("Receive failed");
+		close(sock);
+		return - 1;
+	}
         
         //You can uncomment out the fprintf() calls below to see what is going on
 
-        //fprintf(stdout, "%.*s", bytes_recvd, recv_buff);
+        fprintf(stdout, "%.*s", bytes_recvd, recv_buff);
         total_bytes += bytes_recvd;
-        //fprintf(stdout, "remaining %d, received %d\n", bytes_remaining, bytes_recvd);
+        fprintf(stdout, "remaining %d, received %d\n", bytes_remaining, bytes_recvd);
         bytes_remaining -= bytes_recvd;
     }
 
@@ -194,12 +166,15 @@ int submit_request(int sock, const char *host, uint16_t port, char *resource){
     //so that it can be used in the next request
 
     //---------------------------------------------------------------------------------
-    // TODO:  Documentation
+    // Documentation
     //
     // You dont have any code to change, but explain why this function, if it gets to this
     // point returns an active socket.
     //
-    // YOUR ANSWER:  <START-YOUR-RESPONSE-HERE>
+    // YOUR ANSWER:  If it returns to this point, it means the function has received full
+    // HTTP response without encountering errors. If there were errors, it would have
+    // returned -1 and the socket would be closed. The socket remains valid and open to be
+    // used for other requests.
     //
     //--------------------------------------------------------------------------------
     return sock;
@@ -221,7 +196,7 @@ int main(int argc, char *argv[]){
         print_usage(argv[0]);
         //process the default request
         submit_request(sock, host, port, resource);
-	} else {
+    } else {
         host = argv[1];
         port = atoi(argv[2]);
         resource = argv[3];
