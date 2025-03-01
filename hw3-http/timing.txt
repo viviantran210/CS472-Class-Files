@@ -1,0 +1,23 @@
+Time Results
+
+client-cc.c (Connection: Close)
+Run 1: 0.664083 seconds
+Run 2: 0.339516 seconds
+Run 3: 0.060872 seconds
+Run 4: 0.045852 seconds
+Run 5: 0.443659 seconds
+Average: 0.3107964 seconds
+
+client-ka.cc (Connection: Keep-Alive)
+Run 1: 0.292758 seconds
+Run 2: 0.330917 seconds
+Run 3: 0.036214 seconds
+Run 4: 0.058951 seconds
+Run 5: 0.702303 seconds
+Average: 0.2842286 seconds
+
+The Connection: Close version has a longer average runtime than the Connection: Keep-Alive version.
+Both versions can have high variability (differences are both over 0.61 seconds comparing longest
+time to shortest time). Keep-Alive was expected to perform better on average since it can reuse the 
+same socket for multiple requests. However, there was a time when it took even longer than the longest
+Close version runtime, which could be due to external conditions.  

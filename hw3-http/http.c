@@ -74,77 +74,107 @@ char *strnstr(const char *s, const char *find, size_t slen)
 	return ((char *)s);
 }
 
-
+/**
+ * Takes a host and a port as parameters and returns a valid socket
+ * descriptor if a connection to that host and port is successful.
+ *
+ * Returns a socket descriptor if successful, -2 if it cannot get the
+ * host by name, and -1 if the socket cannot be created or the
+ * connection fails
+ */
 int socket_connect(const char *host, uint16_t port){
-    struct hostent *hp;
-    struct sockaddr_in addr;
-    int sock;
+    struct hostent *hp; // stores host info 
+    struct sockaddr_in addr; // stores server info
+    int sock; // socket descriptor 
 
+    // Resolve the host name to an IP address
     if((hp = gethostbyname(host)) == NULL){
 		herror("gethostbyname");
 		return -2;
 	}
     
-    
+        // copies first resolved IP address to sockaddr_in structure
 	bcopy(hp->h_addr_list[0], &addr.sin_addr, hp->h_length);
-	addr.sin_port = htons(port);
-	addr.sin_family = AF_INET;
-	sock = socket(PF_INET, SOCK_STREAM, 0); 
-	
+	addr.sin_port = htons(port); // converts port number to network byte order
+	addr.sin_family = AF_INET;   // sets address family to IPv4
+	sock = socket(PF_INET, SOCK_STREAM, 0); // creates a socket 
+
+        // checks if socket creation fails
 	if(sock == -1){
 		perror("socket");
 		return -1;
 	}
 
+    // checks if connecting socket to the server fails
+    // on failure, close the socket
     if(connect(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1){
 		perror("connect");
 		close(sock);
         return -1;
 	}
-
+    
+    // return valid socket descriptor
     return sock;
 }
 
-
+/**
+ * Takes a pointer to an HTTP response buffer and its total length and looks for
+ * HTTP header end ("\r\n\r\n") if it exists to find HTTP header length
+ *
+ * Returns the HTTP header length if found or -1 if there is no
+ * HTTP header end found.
+ */
 int get_http_header_len(char *http_buff, int http_buff_len){
-    char *end_ptr;
-    int header_len = 0;
-    end_ptr = strnstr(http_buff,HTTP_HEADER_END,http_buff_len);
+    char *end_ptr; // pointer to locate the end of the HTTP header 
+    int header_len = 0; // stores the HTTP header length
+    end_ptr = strnstr(http_buff,HTTP_HEADER_END,http_buff_len); // search for end of the HTTP header
 
-    if (end_ptr == NULL) {
+    // check if HTTP header end is found, and return -1 if not
+    if (end_ptr == NULL) { 
         fprintf(stderr, "Could not find the end of the HTTP header\n");
         return -1;
     }
 
+    // calculate HTTP header length based on end pointer and start pointer
+    // adds length of HTTP header end as well
     header_len = (end_ptr - http_buff) + strlen(HTTP_HEADER_END);
 
     return header_len;
 }
 
-
+/** 
+ * Takes a pointer to an HTTP response buffer and the HTTP header length
+ * and looks for HTTP content length from the Content-Length header if it 
+ * exists in the header
+ *
+ *
+ * Returns HTTP content length if found, else return 0
+ */
 int get_http_content_len(char *http_buff, int http_header_len){
-    char header_line[MAX_HEADER_LINE];
+    char header_line[MAX_HEADER_LINE]; // buffer to hold header lines 
 
-    char *next_header_line = http_buff;
-    char *end_header_buff = http_buff + http_header_len;
+    char *next_header_line = http_buff; // pointer used to traverse header lines
+    char *end_header_buff = http_buff + http_header_len; // pointer for the HTTP header end
 
+    // loop through all header lines in buffer
     while (next_header_line < end_header_buff){
-        bzero(header_line,sizeof(header_line));
-        sscanf(next_header_line,"%[^\r\n]s", header_line);
+        bzero(header_line,sizeof(header_line)); // clear header_line buffer before reading a new line
+        sscanf(next_header_line,"%[^\r\n]s", header_line); // read next header line until newline is found
 
-        char *isCLHeader2 = strcasecmp(header_line,CL_HEADER);
-        char *isCLHeader = strcasestr(header_line,CL_HEADER);
+	// if Content-Length and : are found in header line, move past it to extract the length value, convert it to an int and return it
+        char *isCLHeader2 = strcasecmp(header_line,CL_HEADER); // case insensitive comparison of header line with "Content-Length" (CL_HEADER)
+        char *isCLHeader = strcasestr(header_line,CL_HEADER); // case insensitive search for CL_HEADER
         if(isCLHeader != NULL){
-            char *header_value_start = strchr(header_line, HTTP_HEADER_DELIM);
+            char *header_value_start = strchr(header_line, HTTP_HEADER_DELIM); // find ":" (HTTP_HEADER_DELIM)
             if (header_value_start != NULL){
-                char *header_value = header_value_start + 1;
-                int content_len = atoi(header_value);
+                char *header_value = header_value_start + 1; // move past delimiter to value
+                int content_len = atoi(header_value); // convert value to an int
                 return content_len;
             }
         }
-        next_header_line += strlen(header_line) + strlen(HTTP_HEADER_EOL);
+        next_header_line += strlen(header_line) + strlen(HTTP_HEADER_EOL); // move to next header line if 'Content-Length' is not found
     }
-    fprintf(stderr,"Did not find content length\n");
+    fprintf(stderr,"Did not find content length\n"); // if no Content-Length header is found
     return 0;
 }
 
