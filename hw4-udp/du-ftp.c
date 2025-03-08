@@ -75,11 +75,12 @@ static int initParams(int argc, char *argv[], prog_config *cfg){
 
 int server_loop(dp_connp dpc, void *sBuff, void *rBuff, int sbuff_sz, int rbuff_sz){
     int rcvSz;
-
+    
     FILE *f = fopen(full_file_path, "wb+");
     if(f == NULL){
+
         printf("ERROR:  Cannot open file %s\n", full_file_path);
-        exit(-1);
+        exit(DP_ERROR_FILE_OPEN);
     }
     if (dpc->isConnected == false){
         perror("Expecting the protocol to be in connect state, but its not");
@@ -107,7 +108,7 @@ int server_loop(dp_connp dpc, void *sBuff, void *rBuff, int sbuff_sz, int rbuff_
 
 
 void start_client(dp_connp dpc){
-    static char sBuff[500];
+    static char sBuff[BUFF_SZ];
 
     if(!dpc->isConnected) {
         printf("Client not connected\n");
@@ -126,7 +127,7 @@ void start_client(dp_connp dpc){
     }
 
     int bytes = 0;
-
+    
     while ((bytes = fread(sBuff, 1, sizeof(sBuff), f )) > 0)
         dpsend(dpc, sBuff, bytes);
 
