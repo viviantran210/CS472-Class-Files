@@ -118,7 +118,7 @@ dp_connp dpClientInit(char *addr, int port) {
 }
 
 
-int dprecv(dp_connp dp, void *buff, int buff_sz){
+int dprecv(dp_connp dp, void *buff, int buff_sz) {
     int total_received = 0;
     void *dest_buff = (char *)buff;
     int recv_len;
@@ -130,9 +130,6 @@ int dprecv(dp_connp dp, void *buff, int buff_sz){
         recv_len = dprecvdgram(dp, _dpBuffer, sizeof(_dpBuffer));
 
         if (recv_len == DP_CONNECTION_CLOSED) {
-            if (total_received > 0) {
-                return total_received;
-            }
             return DP_CONNECTION_CLOSED;
         }
 
@@ -152,6 +149,7 @@ int dprecv(dp_connp dp, void *buff, int buff_sz){
             memcpy(dest_buff + total_received, (_dpBuffer + sizeof(dp_pdu)), copy_len);
 
             total_received += copy_len;
+        }
 
         // Stop if buffer is full
         if (total_received == buff_sz) {
@@ -282,7 +280,7 @@ int dpsend(dp_connp dp, void *sbuff, int sbuff_sz){
 
     while (remaining > 0) {
         if (remaining > dpmaxdgram()) {
-            chunk_size = dpmaxgram();
+            chunk_size = dpmaxdgram();
         }
         else {
             chunk_size = remaining;
