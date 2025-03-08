@@ -119,18 +119,47 @@ dp_connp dpClientInit(char *addr, int port) {
 
 
 int dprecv(dp_connp dp, void *buff, int buff_sz){
-
+    int total_received = 0;
+    void *dest_buff = (char *)buff;
+    int recv_len;
+    int copy_len;
+    int remaining_space;
     dp_pdu *inPdu;
-    int rcvLen = dprecvdgram(dp, _dpBuffer, sizeof(_dpBuffer));
 
-    if(rcvLen == DP_CONNECTION_CLOSED)
-        return DP_CONNECTION_CLOSED;
+    while (total_received < buff_sz) {
+        recv_len = dprecvdgram(dp, _dpBuffer, sizeof(_dpBuffer));
 
-    inPdu = (dp_pdu *)_dpBuffer;
-    if(rcvLen > sizeof(dp_pdu))
-        memcpy(buff, (_dpBuffer+sizeof(dp_pdu)), inPdu->dgram_sz);
+        if (recv_len == DP_CONNECTION_CLOSED) {
+            if (total_received > 0) {
+                return total_received;
+            }
+            return DP_CONNECTION_CLOSED;
+        }
 
-    return inPdu->dgram_sz;
+        inPdu = (dp_pdu *)_dpBuffer;
+
+        // If there is a payload, copy it to the destination buffer
+        if (recv_len > sizeof(dp_pdu)) {
+            remaining_space = buff_sz - total_received;
+
+            if (inPdu->dgram_sz < remaining_space) {
+                copy_len = inPdu->dgram_sz;
+            }
+            else {
+                copy_len = remaining_space;
+            }
+
+            memcpy(dest_buff + total_received, (_dpBuffer + sizeof(dp_pdu)), copy_len);
+
+            total_received += copy_len;
+
+        // Stop if buffer is full
+        if (total_received == buff_sz) {
+            break;
+        }
+    }
+    
+    return total_received;
 }
 
 
@@ -245,16 +274,30 @@ static int dprecvraw(dp_connp dp, void *buff, int buff_sz){
 }
 
 int dpsend(dp_connp dp, void *sbuff, int sbuff_sz){
+    int total_sent = 0;
+    int remaining = sbuff_sz;
+    void *current_buff = sbuff;
+    int chunk_size; 
+    int sndSz;
 
+    while (remaining > 0) {
+        if (remaining > dpmaxdgram()) {
+            chunk_size = dpmaxgram();
+        }
+        else {
+            chunk_size = remaining;
+        }
 
-    //For now, we will not be able to send larger than the biggest datagram
-    if(sbuff_sz > dpmaxdgram()) {
-        return DP_BUFF_UNDERSIZED;
+        // Send current chunk
+        sndSz = dpsenddgram(dp, current_buff, chunk_size);
+
+        total_sent += sndSz;
+
+        remaining -= sndSz;
+        current_buff += sndSz;
     }
 
-    int sndSz = dpsenddgram(dp, sbuff, sbuff_sz);
-
-    return sndSz;
+    return total_sent;
 }
 
 static int dpsenddgram(dp_connp dp, void *sbuff, int sbuff_sz){
